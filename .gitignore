@@ -1,0 +1,4 @@
+# Weigths
+*.pth
+__pycahce__/
+.venv/
