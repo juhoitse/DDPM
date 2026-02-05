@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 
 import torch.nn as nn
@@ -10,21 +9,22 @@ class DiffusionModel(nn.Module):
     Denoising Diffusion Probabilistic Model
     """
     def __init__(self, model, timesteps = 1000, 
-                 beta_start = 1e-4, beta_end = 0.02):
+                 beta_start = 1e-4, beta_end = 0.02, device = 'cuda:0'):
         super(DiffusionModel, self).__init__()
         self.model = model
         self.timesteps = timesteps
         self.inference_steps = torch.arange(self.timesteps-1, -1, -1)
+        self.device = torch.device(device)
         
         # define beta schedule (linear)
-        self.betas = torch.linspace(beta_start, beta_end, timesteps)
+        self.betas = torch.linspace(beta_start, beta_end, timesteps).to(self.device)
         betas_sqrt = self.betas.sqrt()
         # dict for legibility and fast access
         self.b = {'b': self.betas, 
                   'sqrt': betas_sqrt}
 
         # define the alpha variable for ease of notation and to save on computations
-        self.alphas = 1.0 - self.betas
+        self.alphas = (1.0 - self.betas).to(self.device)
         alphas_sqrt = self.alphas.sqrt()
         alpha_bars = self.alphas.cumprod(dim=-1)
         alpha_bars_sqrt = alpha_bars.sqrt()
@@ -90,21 +90,21 @@ class DiffusionModel(nn.Module):
         Returns:
         x of shape (batch_size, n_channels, H, W): Generated samples (one sample per input image).
         """
-        noise = torch.randn_like(images)
+        noise = torch.randn_like(images).to(self.device)
         x_t = noise
-        t_tensor = torch.ones(images.size(0))
+        t_tensor = torch.ones(images.size(0)).to(self.device)
 
         # clean up the loop by omitting the self
         a = self.a
         b = self.b
-        for t in tqdm(reversed(range(self.timesteps))):
+        for t in reversed(range(self.timesteps)):
             a_t = a['a'][t]
             b_t = b['b'][t]
 
             squiggly_b = (1-a['bar'][t-1])/(1-a['bar'][t])*b_t
 
             temps = t_tensor * t
-            z = torch.randn_like(images)
+            z = torch.randn_like(images).to(self.device)
 
             x_mask = a['bar sqrt'][t-1] * b_t / (1-a['bar'][t]) * images[mask_known] + a['sqrt'][t] * (1-a['bar'][t-1]) / (1-a['bar'][t]) * x_t[mask_known]
             x_mask += squiggly_b.sqrt() * z[mask_known]
@@ -134,22 +134,22 @@ class DiffusionModel(nn.Module):
         if init_x is not None:
             x_t = init_x
         else:
-            x_t = torch.randn(x_shape)
+            x_t = torch.randn(x_shape).to(self.device)
 
         # multiply this tensor by t to get the temp tensor
-        t_tensor = torch.ones(x_shape[0])
+        t_tensor = torch.ones(x_shape[0]).to(self.device)
 
         # clean the loop by omitting the self        
         a = self.a
         b = self.b
 
         # iteratively denoise
-        for t in tqdm(reversed(range(self.timesteps-1))):
+        for t in reversed(range(self.timesteps-1)):
             a_t = self.a['a'][t]
             b_t = self.b['b'][t]
 
             temps = t_tensor * t
-            z = torch.randn(x_shape)
+            z = torch.randn(x_shape).to(self.device)
 
             pred_noise = self.model(x_t, temps, labels)
 
@@ -158,6 +158,6 @@ class DiffusionModel(nn.Module):
         a0 = a['a'][0]
         b0 = b['b'][0]
 
-        x_0 = 1 / a0 * (x_t - b0 / a['1-sqrt'][0] * model(x_t, temps, labels))
+        x_0 = 1 / a0 * (x_t - b0 / a['1-sqrt'][0] * self.model(x_t, temps, labels))
                                       
         return x_0

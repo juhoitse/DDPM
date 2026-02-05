@@ -8,6 +8,7 @@ import torch
 import torchvision.utils as utils
 import torch.nn.functional as F
 import torch.nn as nn
+from einops import rearrange
 
 
 def save_model(model, filename):
@@ -22,10 +23,12 @@ def load_model(model, filename, device):
     model.to(device)
     model.eval()
 
-def show_images(images, ncol=12, figsize=(8,8), **kwargs):
+def show_images(images, ncol=12, figsize=(8,2), title=None, **kwargs):
     fig, ax = plt.subplots(figsize=figsize)
     ax.axis('off')
     out = rearrange(images, '(b1 b2) c h w -> c (b1 h) (b2 w)', b2=ncol).cpu()
+    if title is not None:
+        fig.suptitle(title)
     if out.shape[0] == 1:
         ax.matshow(out[0], **kwargs)
     else:

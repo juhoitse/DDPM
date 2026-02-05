@@ -16,6 +16,8 @@ class UNet(nn.Module):
         super().__init__()
         
         self.num_classes = num_classes
+
+        self.time_emb_dim = time_emb_dim
         
         self.time_mlp = nn.Sequential(
             PositionalEmbedding(base_channels),
@@ -80,7 +82,7 @@ class UNet(nn.Module):
         labels of shape (batch_size,): Classes of the images, None if no conditioning on class
         """
         
-        if time is not None:
+        if self.time_emb_dim is not None:
             time_emb = self.time_mlp(time)
         else:
             time_emb = None
